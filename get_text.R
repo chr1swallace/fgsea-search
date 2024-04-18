@@ -1,7 +1,9 @@
 library(data.table)
+library(magrittr)
 
 if(!file.exists("data"))
-  system("mkdir ~/scratch/fgsea_files && ln -s ~/scratch/fgsea_files data")
+    system("mkdir data")
+  #system("mkdir ~/scratch/fgsea_files && ln -s ~/scratch/fgsea_files data")
 file="pmc_result.txt" # downloaded from https://www.ncbi.nlm.nih.gov/pmc/?term=fgsea on 18/4/24
 data=fread(file,header=FALSE)
 setnames(data,"V1","PMCID")
@@ -25,13 +27,34 @@ files_nonempty= sizes > 0
 message("found ",length(files_found)," / wanted ",nrow(data))
 message("with data ",sum(files_nonempty)," / wanted ",nrow(data))
 
-## library("XML")
-## for(i in which(files_nonempty)) {
-##   doc <- xmlParse(files_found[i])
-## top <- xmlRoot(doc)
-## top[["keyword"]]
-## xmlValue(top[["start_date"]])
-## xmlValue(top[["location"]])
+preranked1=system("grep -l 'fgsea function' data/*",intern=TRUE)  %>% gsub("data/|.xml","",.)
+preranked2=system("grep -l 'function fgsea' data/*",intern=TRUE)  %>% gsub("data/|.xml","",.)
+preranked_any=system("grep -l 'fgsea' data/*",intern=TRUE)  %>% gsub("data/|.xml","",.)
+label1=system("grep -l 'fgseaLabel function' data/*",intern=TRUE)  %>% gsub("data/|.xml","",.)
+label2=system("grep -l 'function fgseaLabel' data/*",intern=TRUE)  %>% gsub("data/|.xml","",.)
+label_any=system("grep -l 'fgseaLabel' data/*",intern=TRUE)  %>% gsub("data/|.xml","",.)
 
-##   df=xmlToDataFrame(nodes=getNodeSet(doc,"//attr"))
-##   [c("attrlabl","attrdef","attrtype","attrdomv")]
+## find years
+## years=system("grep -o ' 20[0-9][0-9] ' pmc_full.txt",intern=TRUE)
+## pmcid=system("grep -o 'PMC[0-9][0-9]*' pmc_full.txt", intern=TRUE)
+## years=system("grep -o '<date>20[0-9]*</date>' data/*", intern=TRUE)
+years=system("grep -o '<infon key=\"year\">20[0-9][0-9]</infon>' data/*", intern=TRUE) 
+dt = gsub("data/|.xml|<infon key=\"year\">|</infon>","",years) %>% tstrsplit(., ":") %>% as.data.table()
+setnames(dt,c("pmcid","datestr"))
+dt=dt[!duplicated(pmcid)] # because the first year relates to the publication, the next to the publication of its references
+dt[,year:=as.numeric(datestr)]
+
+dt[,fgsea_function:=pmcid %in% c(preranked1,preranked2)]
+dt[,fgseaLabel_function:=pmcid %in% c(label1,label2)]
+dt[,fgsea_any:=pmcid %in% c(preranked_any)]
+dt[,fgseaLabel_any:=pmcid %in% c(label_any)]
+
+with(dt,sum(fgsea_function))
+with(dt,sum(fgseaLabel_function))
+
+library(ggplot2)
+library(cowplot)
+theme_set(theme_cowplot())
+bottom=ggplot(dt[fgsea_function==TRUE | fgseaLabel_function==TRUE], aes(x=year,fill=fgseaLabel_function)) + geom_histogram(binwidth=1,col="grey") + background_grid(major="y") + scale_fill_discrete("papers report gseaLabel\nfunction or gsea function")
+top=ggplot(dt[], aes(x=year,fill=fgseaLabel_any)) + geom_histogram(binwidth=1,col="grey") + background_grid(major="y") + scale_fill_discrete("papers report\ngseaLabel at all")
+plot_grid(top,bottom,ncol=1)
