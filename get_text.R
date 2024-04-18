@@ -3,7 +3,6 @@ library(magrittr)
 
 if(!file.exists("data"))
     system("mkdir data")
-  #system("mkdir ~/scratch/fgsea_files && ln -s ~/scratch/fgsea_files data")
 file="pmc_result.txt" # downloaded from https://www.ncbi.nlm.nih.gov/pmc/?term=fgsea on 18/4/24
 data=fread(file,header=FALSE)
 setnames(data,"V1","PMCID")
